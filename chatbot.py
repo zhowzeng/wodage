@@ -1,53 +1,46 @@
 import streamlit as st
-import requests
+
+from swarm import Agent, Swarm
 
 
-def get_agent_output(messages: list):
-    response = requests.post(
-        url="http://127.0.0.1:5000/chat",
-        headers={"Content-Type": "application/json"},
-        json={"messages": messages, "model": st.session_state["openai_model"]},
+def run_agent(messages: list):
+    agent = Agent(
+        name="General Assistant",
+        instructions="回答使用者的問題，語言使用正體中文或英文。",
+        model=st.session_state.model,
     )
-    response.raise_for_status()
-    return response.json()["response"]
+    response = st.session_state.client.run(agent=agent, messages=messages)
+    return response.messages
 
 
 st.title("我大哥")
 st.info("目前能夠簡單聊天，未來會加入更多功能。", icon="ℹ️")
 
-# Set OpenAI API key from Streamlit secrets
 
-# Set a default model
-if "openai_model" not in st.session_state:
-    st.session_state["openai_model"] = "gpt-4o-mini"
+if "client" not in st.session_state:
+    st.session_state.client = Swarm()
+
+if "model" not in st.session_state:
+    st.session_state.model = "gpt-4o-mini"
 
 with st.sidebar:
     choice = st.selectbox(
         "Select OpenAI Model",
         options=["gpt-4o-mini", "gpt-4o"],
     )
-    st.session_state.openai_model = choice
+    st.session_state.model = choice
 
 
-# Initialize chat history
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Display chat messages from history on app rerun
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Accept user input
 if prompt := st.chat_input("What is up?"):
-    # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
-    # Display user message in chat message container
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    # Display assistant response in chat message container
-    with st.chat_message("assistant"):
-        response = get_agent_output(st.session_state.messages)
-        st.markdown(response)
-
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    st.chat_message("user").write(prompt)
+    messages = run_agent(st.session_state.messages)
+    st.session_state.messages.extend(messages)
+    st.rerun()
